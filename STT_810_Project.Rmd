@@ -1,0 +1,172 @@
+---
+title: "STT_810_Project"
+author: "Beau Belkowski"
+date: "2025-09-24"
+output: html_document
+---
+```{r}
+# Loading in necessary libraries
+library(tidyverse)
+library(ggplot2)
+```
+### Project Header:
+
+In this project our goal is to determine how much a players success at the NFL combine predicts a players success in the NFL. The are many different way to approach this problem. For our purposes we will use linear regression, conditional probabilities, and confidence intervals to find an answer. For our data we will need to have information on how players performed at the combine and how long of an NFL career they had. We will use career length as a measurement for success because remaining in the NFL for a long period of time is a major success on its own. We will have to combine these datasets to match the proper conbine data with the proper career length for each player. Our data does not include every NFL player to ever participate at the combine so all of the numbers we are calculating are statistics not parameters. 
+
+##### Data Cleaning and Formatting
+
+```{r}
+# Reading in data files
+combine <- read.csv('/Users/beaubelkowski/Downloads/NFL.csv') # data on how players performed at the NFL combine
+career <- read.csv('/Users/beaubelkowski/Downloads/NFL_player_database.csv') # data on the length of players careers
+combine
+career
+```
+
+```{r}
+career$career_length <- career$last - career$debut # creating a new column for total career length 
+career$Player <- career$name # duplicating the name column and changing the same so both data sets have the same name
+career_lengths <- career %>% # creating new data frame with only the information needed to combine the datasets
+  select(Player, career_length)
+career_lengths <- distinct(career_lengths, Player, .keep_all = TRUE) # removing any duplicate rows
+career_lengths
+```
+
+```{r}
+combine$Player <- sub("\\\\.*", "", combine$Player) # reformatting the players names to they are the same for both data sets
+combine <- distinct(combine, Player, .keep_all = TRUE) # removing any duplicate rows
+head(combine$Player)
+```
+
+```{r}
+combine_dups <- combine %>% # Checking to see if there are any remaining duplicates
+  count(Player) %>% # counting the number of players with the same name
+  filter(n > 1) # only keeping rows that have a duplicate
+
+combine_dups
+
+career_dups <- career_lengths %>% # Checking to see if there are any remaining duplicates
+  count(Player) %>% # counting the number of players with the same name
+  filter(n > 1) # only keeping rows that have a duplicate
+
+career_dups
+# Since both data frames are empyt we know that there are no duplicates
+```
+
+```{r}
+Players <- combine %>% # combining the two data sets and naming the new one "Players"
+  left_join(career_lengths, by = "Player") # using a left join to combine the datasets
+Players$career_length[is.na(Players$career_length)] <- 0 # setting the career length to 0 for players missing career length data
+# The team, round, pick, and year that a player was drafted are all combined into one column
+Players <- Players %>% # this code separates this information into their own columns
+  separate( col = Drafted..tm.rnd.yr., into = c("team", "round", "pick", "year_drafted"), sep = " / ")
+
+Players
+```
+
+
+```{r}
+mean(Players$career_length) # This is the average length of a career in the NFL based on our sample
+```
+
+```{r}
+table(Players$Drafted) # This shows the distribution of Players drafter vs not drafted
+```
+
+
+
+##### Conditional Probability
+
+In this section we will investigate how important NFL combine metrics are in determining career success. To do this wwe will solve for condition probabilities using Bayes theorem
+
+```{r}
+# Probability that the player had an above average career length given that they were not drafted
+
+P_not_drafted <- length(Players$Drafted[Players$Drafted == 'No']) / length(Players$Drafted) # Calculating the probability of not being drafted
+
+condition <- Players$Drafted == "No" & Players$career_length > 3.256886 # Creating a logical condition for both events
+P_both <- sum(condition) / nrow(Players) # Computing joint probability
+
+prob <- P_both/P_not_drafted # Using Bayes Theorem
+cat("The probability of having an above average career length given that the player was not drafted:",prob)
+```
+
+```{r}
+# Probability that the player had an above average career length given that they were drafted
+
+P_not_drafted <- length(Players$Drafted[Players$Drafted == 'Yes']) / length(Players$Drafted) # Calculating the probability of not being drafted
+
+condition <- Players$Drafted == "Yes" & Players$career_length > 3.256886 # Creating a logical condition for both events
+P_both <- sum(condition) / nrow(Players) # Computing joint probability
+
+prob <- P_both/P_not_drafted # Using Bayes Theorem
+cat("The probability of having an above average career length given that the player was drafted:",prob)
+
+```
+
+These two results indicate that being drafted is a good predictor of whether a players will have a successful NFL career. The probability of having a sucess full career goes from a 17% chance for players not drafted to 55% chance for players who are drafted
+
+Now we will look at position specific categories
+
+```{r}
+# Probability of an offensive lineman having a longer than average NFL career given that they placed in the 75% or better in the bench press at the NFL combine
+
+Oline <- Players %>% filter(Position_Type == 'offensive_lineman', !is.na(Bench_Press_Reps)) # making a new data frame with only offensive lineman that partook in the bench press test
+quantile(Oline$Bench_Press_Reps, prob = c(0.75)) # calculating the 75th percentile of bench press reps
+
+P_75_perc <- 0.25 # the 75th percentile represents anything in the top quarter of the data. This means that in every situation there is a 25% chance that a random data point is in the 75th percentile
+
+condition <- Oline$Bench_Press_Reps >= 28 & Oline$career_length > 3.256886 # Creating a logical condition for both events
+
+P_both <- sum(condition) / nrow(Oline) # Computing joint probability
+
+prob <- P_both/P_75_perc # Using Bayes Theorem
+cat("The probability of an offensive lineman having an above average career length given that the player finished in the 75th percentile in bench press:",prob)
+```
+
+```{r}
+#Probability that an Offensive lineman has a longer than average career given that they did not participate in the bench press at the combine
+
+Oline2 <- Players %>% filter(Position_Type == 'offensive_lineman', is.na(Bench_Press_Reps)) # new dataframe only containing offensive lineman who did not participate in the bench press
+
+P_no_bench <- nrow(Oline2)/nrow(Oline) # Probability of not participating in the bench press
+
+condition <- Oline2$career_length > 3.256886 # logical condition defining both events
+P_both <- sum(condition) / nrow(Oline) # Computing joint probability
+
+prob <- P_both / P_no_bench # Using Bayes Theorem
+cat("The probability of an offensive lineman having an above average career length given that the player did not participate in the bench press:",prob)
+```
+
+There were a lot of missing values in our dataset because players may sometimes chhose not to participate in a drill at the NFL combine. The goal of this code was to see if there was to see how much of a difference there is between offensive lineman who did or didn't participate in the bench press and how much that affected their potential for success in the NFL.
+
+```{r}
+# Probability of an offensive backer having a longer than average NFL career given that they placed in the 75% or better in the 40 yard dash at the NFL combine
+
+O_backs <- Players %>% filter(Position_Type == 'backs_receivers', !is.na(Sprint_40yd)) # making a new data frame with only offensive backer that partook in the 40 yard dash
+quantile(O_backs$Sprint_40yd, prob = c(0.25)) # calculating the 75th percentile of the 40 yard dash. It is better to have a small time so to find the 75% percentile we must find its inverse which is the 25th percentile
+
+P_75_perc <- 0.25 # the 75th percentile represents anything in the top quarter of the data. This means that in every situation there is a 25% chance that a random data point is in the 75th percentile. 
+
+condition <- O_backs$Sprint_40yd <= 4.49 & O_backs$career_length > 3.256886 # Creating a logical condition for both events
+P_both <- sum(condition) / nrow(O_backs) # Computing joint probability
+
+prob <- P_both/P_75_perc # Using Bayes Theorem
+cat("The probability of an offensive backer having an above average career length given that the player finished in the 75th percentile in 40 yard dash:",prob)
+```
+
+```{r}
+# Probability of an line backer having a longer than average NFL career given that they placed in the 75% or better in the Agility 3 cone drill at the NFL combine
+
+line_backer <- Players %>% filter(Position_Type == 'line_backer', !is.na(Agility_3cone)) # making a new data frame with only line backers that partook in the Agility 3 cone drill
+quantile(line_backer$Agility_3cone, prob = c(0.25)) # calculating the 75th percentile of Agility 3 cone drill. It is better to have a small time so to find the 75% percentile we must find its inverse which is the 25th percentile.
+
+P_75_perc <- 0.25 # the 75th percentile represents anything in the top quarter of the data. This means that in every situation there is a 25% chance that a random data point is in the 75th percentile
+
+condition <- line_backer$Agility_3cone <= 6.97 & line_backer$career_length > 3.256886 # Creating a logical condition for both events
+
+P_both <- sum(condition) / nrow(line_backer) # Computing joint probability
+
+prob <- P_both/P_75_perc # Using Bayes Theorem
+cat("The probability of a line backer having an above average career length given that the player finished in the 75th percentile in agility 3 cone drill:",prob)
+```
