@@ -110,31 +110,31 @@ Now we will look at position specific categories
 
 
 ```{r}
-#Probability that an Offensive lineman has a longer than average career given that they did participate in the bench press at the combine
+#Probability that an Offensive lineman is drafted given that they did participate in the bench press at the combine
 Oline <- Players %>% filter(Position_Type == 'offensive_lineman') # making a new data frame with only offensive lineman
 Oline1 <- Players %>% filter(Position_Type == 'offensive_lineman', !is.na(Bench_Press_Reps)) # making a new data frame with only offensive lineman who did participate in the bench press
 
 P_bench <- nrow(Oline1)/nrow(Oline) # Probability of not participating in the bench press
 
-condition <- Oline1$career_length > 3.256886 # logical condition defining both events
+condition <- Oline1$Drafted == 'Yes' # logical condition defining both events
 P_both <- sum(condition) / nrow(Oline) # Computing joint probability
 
 prob <- P_both / P_bench # Using Bayes Theorem
-cat("The probability of an offensive lineman having an above average career length given that the player did participate in the bench press:",prob)
+cat("The probability of an offensive lineman being drafted given that the player did participate in the bench press:",prob)
 ```
 
 ```{r}
-#Probability that an Offensive lineman has a longer than average career given that they did not participate in the bench press at the combine
+#Probability that an Offensive lineman is drafted given that they did not participate in the bench press at the combine
 
 Oline2 <- Players %>% filter(Position_Type == 'offensive_lineman', is.na(Bench_Press_Reps)) # new dataframe only containing offensive lineman who did not participate in the bench press
 
 P_no_bench <- nrow(Oline2)/nrow(Oline) # Probability of not participating in the bench press
 
-condition <- Oline2$career_length > 3.256886 # logical condition defining both events
+condition <- Oline2$Drafted == 'Yes' # logical condition defining both events
 P_both <- sum(condition) / nrow(Oline) # Computing joint probability
 
 prob <- P_both / P_no_bench # Using Bayes Theorem
-cat("The probability of an offensive lineman having an above average career length given that the player did not participate in the bench press:",prob)
+cat("The probability of an offensive lineman being drafted given that the player did not participate in the bench press:",prob)
 
 # final should not be 2
 ```
